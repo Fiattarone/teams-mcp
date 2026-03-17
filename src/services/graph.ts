@@ -1,9 +1,16 @@
-import { type AccountInfo, PublicClientApplication } from "@azure/msal-node";
+import {
+  type AccountInfo,
+  ConfidentialClientApplication,
+  PublicClientApplication,
+} from "@azure/msal-node";
 import { Client } from "@microsoft/microsoft-graph-client";
 import { cachePlugin } from "../msal-cache.js";
 
 const CLIENT_ID = "14d82eec-204b-4c2f-b7e8-296a70dab67e";
 const AUTHORITY = "https://login.microsoftonline.com/common";
+
+/** The default scope for client credentials (app-only) auth. */
+const CLIENT_CREDENTIAL_SCOPES = ["https://graph.microsoft.com/.default"];
 
 /** Scopes sufficient for read-only operations (no message sending, no file uploads). */
 export const READ_ONLY_SCOPES = [
@@ -38,6 +45,7 @@ export class GraphService {
   private isInitialized = false;
   private tokenExpiresAt: Date | undefined;
   private msalApp: PublicClientApplication | undefined;
+  private confidentialApp: ConfidentialClientApplication | undefined;
   private msalAccount: AccountInfo | undefined;
   private _readOnlyMode = false;
 
@@ -81,7 +89,37 @@ export class GraphService {
         return;
       }
 
-      // Priority 2: MSAL with cached refresh token for automatic token renewal
+      // Priority 2: Client credentials (app-only) via env vars
+      const tenantId = process.env.AZURE_TENANT_ID;
+      const clientId = process.env.AZURE_CLIENT_ID;
+      const clientSecret = process.env.AZURE_CLIENT_SECRET;
+
+      if (tenantId && clientId && clientSecret) {
+        this.confidentialApp = new ConfidentialClientApplication({
+          auth: {
+            clientId,
+            clientSecret,
+            authority: `https://login.microsoftonline.com/${tenantId}`,
+          },
+        });
+
+        const result = await this.confidentialApp.acquireTokenByClientCredential({
+          scopes: CLIENT_CREDENTIAL_SCOPES,
+        });
+
+        if (result) {
+          this.tokenExpiresAt = result.expiresOn ?? undefined;
+          this.client = Client.initWithMiddleware({
+            authProvider: {
+              getAccessToken: () => this.acquireClientCredentialToken(),
+            },
+          });
+          this.isInitialized = true;
+        }
+        return;
+      }
+
+      // Priority 3: MSAL with cached refresh token for automatic token renewal
       this.msalApp = new PublicClientApplication({
         auth: {
           clientId: CLIENT_ID,
@@ -144,11 +182,38 @@ export class GraphService {
     return result.accessToken;
   }
 
+  private async acquireClientCredentialToken(): Promise<string> {
+    if (!this.confidentialApp) {
+      throw new Error("ConfidentialClientApplication not initialized");
+    }
+
+    const result = await this.confidentialApp.acquireTokenByClientCredential({
+      scopes: CLIENT_CREDENTIAL_SCOPES,
+    });
+
+    if (!result) {
+      throw new Error("Failed to acquire client credential token. Check AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET.");
+    }
+
+    this.tokenExpiresAt = result.expiresOn ?? undefined;
+    return result.accessToken;
+  }
+
   async getAuthStatus(): Promise<AuthStatus> {
     await this.initializeClient();
 
     if (!this.client) {
       return { isAuthenticated: false };
+    }
+
+    // Client credentials (app-only) auth has no /me endpoint
+    if (this.confidentialApp) {
+      return {
+        isAuthenticated: true,
+        userPrincipalName: "(app-only / client credentials)",
+        displayName: `App: ${process.env.AZURE_CLIENT_ID}`,
+        expiresAt: this.tokenExpiresAt?.toISOString(),
+      };
     }
 
     try {
