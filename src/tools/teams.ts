@@ -53,7 +53,7 @@ export function registerTeamsTools(
     async () => {
       try {
         const client = await graphService.getClient();
-        const response = (await client.api("/me/joinedTeams").get()) as GraphApiResponse<Team>;
+        const response = (await client.api(`${graphService.userPath}/joinedTeams`).get()) as GraphApiResponse<Team>;
 
         if (!response?.value?.length) {
           return {

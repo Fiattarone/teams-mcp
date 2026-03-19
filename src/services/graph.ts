@@ -48,6 +48,35 @@ export class GraphService {
   private confidentialApp: ConfidentialClientApplication | undefined;
   private msalAccount: AccountInfo | undefined;
   private _readOnlyMode = false;
+  private _appOnlyMode = false;
+
+  /**
+   * Whether we're using app-only (client credentials) auth.
+   * When true, tools must use /users/{userId}/... instead of /me/...
+   */
+  get appOnlyMode(): boolean {
+    return this._appOnlyMode;
+  }
+
+  /**
+   * The user ID to act on behalf of in app-only mode.
+   * Set via APP_USER_ID env var. Required for app-only auth.
+   */
+  get appUserId(): string | undefined {
+    return process.env.APP_USER_ID || undefined;
+  }
+
+  /**
+   * Returns the base path for user-scoped requests.
+   * In delegated mode: "/me"
+   * In app-only mode: "/users/{APP_USER_ID}"
+   */
+  get userPath(): string {
+    if (this._appOnlyMode && this.appUserId) {
+      return `/users/${this.appUserId}`;
+    }
+    return "/me";
+  }
 
   static getInstance(): GraphService {
     if (!GraphService.instance) {
@@ -109,6 +138,7 @@ export class GraphService {
 
         if (result) {
           this.tokenExpiresAt = result.expiresOn ?? undefined;
+          this._appOnlyMode = true;
           this.client = Client.initWithMiddleware({
             authProvider: {
               getAccessToken: () => this.acquireClientCredentialToken(),

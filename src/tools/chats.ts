@@ -51,7 +51,7 @@ export function registerChatTools(
 
         const client = await graphService.getClient();
         const response = (await client
-          .api(`/me/chats?${queryString}`)
+          .api(`${graphService.userPath}/chats?${queryString}`)
           .get()) as GraphApiResponse<Chat>;
 
         if (!response?.value?.length) {
@@ -199,7 +199,7 @@ export function registerChatTools(
 
         // First request
         let response = (await client
-          .api(`/me/chats/${chatId}/messages?${queryString}`)
+          .api(`/chats/${chatId}/messages?${queryString}`)
           .get()) as GraphApiResponse<ChatMessage>;
 
         if (response?.value) {
@@ -335,7 +335,7 @@ export function registerChatTools(
         const client = await graphService.getClient();
 
         const message = (await client
-          .api(`/me/chats/${chatId}/messages/${messageId}`)
+          .api(`/chats/${chatId}/messages/${messageId}`)
           .get()) as ChatMessage;
 
         if (!message) {
@@ -582,7 +582,7 @@ export function registerChatTools(
         }
 
         const result = (await client
-          .api(`/me/chats/${chatId}/messages`)
+          .api(`/chats/${chatId}/messages`)
           .post(messagePayload)) as ChatMessage;
 
         // Build success message
@@ -627,14 +627,21 @@ export function registerChatTools(
         const client = await graphService.getClient();
 
         // Get current user ID
-        const me = (await client.api("/me").get()) as User;
+        let currentUserId: string | undefined;
+        if (graphService.appOnlyMode) {
+          currentUserId = graphService.appUserId;
+          if (!currentUserId) throw new Error("APP_USER_ID env var is required for app-only auth");
+        } else {
+          const me = (await client.api("/me").get()) as User;
+          currentUserId = me?.id;
+        }
 
         // Create members array
         const members: ConversationMember[] = [
           {
             "@odata.type": "#microsoft.graph.aadUserConversationMember",
             user: {
-              id: me?.id,
+              id: currentUserId,
             },
             roles: ["owner"],
           } as ConversationMember,
@@ -786,7 +793,7 @@ export function registerChatTools(
         // Update the message using PATCH
         // Note: Using /me/chats/ endpoint for delegated permissions
         // The API also requires proper permissions: Chat.ReadWrite
-        await client.api(`/me/chats/${chatId}/messages/${messageId}`).patch(messagePayload);
+        await client.api(`/chats/${chatId}/messages/${messageId}`).patch(messagePayload);
 
         // Build success message
         const successText = `✅ Message updated successfully. Message ID: ${messageId}${
@@ -831,12 +838,19 @@ export function registerChatTools(
         const client = await graphService.getClient();
 
         // Get current user ID for the endpoint
-        const me = (await client.api("/me").get()) as { id: string };
+        let userId: string;
+        if (graphService.appOnlyMode) {
+          if (!graphService.appUserId) throw new Error("APP_USER_ID env var is required for app-only auth");
+          userId = graphService.appUserId;
+        } else {
+          const me = (await client.api("/me").get()) as { id: string };
+          userId = me.id;
+        }
 
         // Soft delete the message using POST
         // Endpoint: POST /users/{userId}/chats/{chatsId}/messages/{chatMessageId}/softDelete
         await client
-          .api(`/users/${me.id}/chats/${chatId}/messages/${messageId}/softDelete`)
+          .api(`/users/${userId}/chats/${chatId}/messages/${messageId}/softDelete`)
           .post({});
 
         return {
@@ -904,7 +918,7 @@ export function registerChatTools(
         };
 
         const result = (await client
-          .api(`/me/chats/${chatId}/messages`)
+          .api(`/chats/${chatId}/messages`)
           .post(messagePayload)) as ChatMessage;
 
         return {

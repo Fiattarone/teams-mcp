@@ -165,11 +165,18 @@ export function registerSearchTools(
         const client = await graphService.getClient();
 
         // Resolve current user
-        const me = await client.api("/me").get();
-        const userId = me?.id;
+        let userId: string | undefined;
+        let displayName = "Current User";
+        if (graphService.appOnlyMode) {
+          userId = graphService.appUserId;
+        } else {
+          const me = await client.api("/me").get();
+          userId = me?.id;
+          displayName = me?.displayName || "Current User";
+        }
         if (!userId) {
           return {
-            content: [{ type: "text", text: "❌ Error: Could not determine current user ID" }],
+            content: [{ type: "text", text: "❌ Error: Could not determine current user ID. Set APP_USER_ID env var for app-only auth." }],
           };
         }
 
@@ -199,7 +206,7 @@ export function registerSearchTools(
               text: JSON.stringify(
                 {
                   timeRange: `Last ${hours} hours`,
-                  mentionedUser: me?.displayName || "Current User",
+                  mentionedUser: displayName,
                   total: container.total,
                   moreResultsAvailable: container.moreResultsAvailable,
                   mentions: formatSearchHits(container.hits, contentFormat ?? "markdown"),

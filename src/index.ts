@@ -313,6 +313,7 @@ async function main() {
       console.log("  AZURE_TENANT_ID=<id>      # Azure AD tenant (for client credentials)");
       console.log("  AZURE_CLIENT_ID=<id>      # Azure AD app client ID");
       console.log("  AZURE_CLIENT_SECRET=<s>   # Azure AD app client secret");
+      console.log("  APP_USER_ID=<id>          # User ID to act as (required for client credentials)");
       console.log("  TEAMS_MCP_READ_ONLY=true  # Start MCP server in read-only mode");
       console.log("  AUTH_TOKEN=<jwt>          # Use a pre-existing access token");
       return;

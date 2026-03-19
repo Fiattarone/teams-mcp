@@ -245,7 +245,7 @@ export async function uploadFileToChat(
   const mimeType = detectMimeType(filePath);
   const { buffer, size } = await readLocalFile(filePath);
 
-  const driveResponse = (await client.api("/me/drive").get()) as { id?: string };
+  const driveResponse = (await client.api(`${graphService.userPath}/drive`).get()) as { id?: string };
   if (!driveResponse?.id) {
     throw new Error("Failed to resolve user drive ID");
   }

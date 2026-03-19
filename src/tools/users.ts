@@ -16,7 +16,7 @@ export function registerUsersTools(
     async () => {
       try {
         const client = await graphService.getClient();
-        const user = (await client.api("/me").get()) as User;
+        const user = (await client.api(graphService.userPath).get()) as User;
 
         const userSummary: UserSummary = {
           displayName: user.displayName,
